@@ -1,0 +1,13 @@
+# Ignores Python temporary compilation output
+__pycache__
+*.pyc
+
+# Ignore operating system icon databases
+.DS_Store
+Thumbs.db
+
+# Ignores downloaded datasets
+/datasets
+
+# Ignores the cache of MyPy (Python static type analysis tool)
+.mypy_cache
