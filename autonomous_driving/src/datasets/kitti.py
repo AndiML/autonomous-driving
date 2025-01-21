@@ -292,75 +292,6 @@ class KITTICustom(Dataset):
             return image
 
 
-    def draw_bounding_boxes_cv2(self, image: numpy.ndarray, labels: dict) -> numpy.ndarray:
-        """
-        Draw bounding boxes on the image using OpenCV.
-
-        Args:
-            image (PIL.Image.Image or torch.Tensor): The image to draw on.
-            labels (dict): Dictionary containing 'boxes' and 'labels'.
-                           'boxes' should be a tensor of shape (N,4) in YOLO format [x_center, y_center, w, h],
-                           normalized between 0 and 1.
-                           'labels' should be a tensor of shape (N,) with class indices.
-
-        Returns:
-            np.ndarray: Image with bounding boxes drawn in BGR format (suitable for OpenCV).
-        """
-        # Convert image to OpenCV format (numpy array)
-        # Convert RGB to BGR
-        image = numpy.transpose(numpy.array(image), [1,2,0])
-        image_cv = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-        # Invert LABEL_TO_INDEX to get index to label mapping
-        index_to_label = {v: k for k, v in self.LABEL_TO_INDEX.items()}
-
-        # Define a color palette (BGR format)
-        COLORS = {
-            "Car": (0, 0, 255),        # Red
-            "Pedestrian": (255, 0, 0), # Blue
-            "Cyclist": (0, 255, 0)     # Green
-        }
-
-        for box, label_idx in zip(labels['boxes'], labels['labels']):
-            # Convert YOLO format to pixel coordinates
-            x_center, y_center, w, h = box.tolist()
-            xmin = int((x_center - w / 2) * image_cv.shape[1])
-            ymin = int((y_center - h / 2) * image_cv.shape[0])
-            xmax = int((x_center + w / 2) * image_cv.shape[1])
-            ymax = int((y_center + h / 2) * image_cv.shape[0])
-
-            # Get label name
-            label = index_to_label.get(label_idx.item(), "N/A")
-
-            # Get color for the label
-            color = COLORS.get(label, (0, 255, 255))  # Default to Yellow
-
-            # Draw rectangle
-            cv2.rectangle(image_cv, (xmin, ymin), (xmax, ymax), color, thickness=2)
-
-            # Prepare label text
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 0.5
-            font_thickness = 1
-            text = label
-
-            # Get text size
-            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
-
-            # Draw text background rectangle
-            cv2.rectangle(image_cv, (xmin, ymin - text_height - baseline), (xmin + text_width, ymin), color, thickness=-1)
-
-            # Put text above the rectangle
-            cv2.putText(image_cv, text, (xmin, ymin - baseline), font, font_scale, (255, 255, 255), font_thickness, lineType=cv2.LINE_AA)
-
-        plt.figure(figsize=(10, 8))
-        plt.imshow(image_cv)
-        plt.axis('off')  # Hide axis
-        plt.title("Image with Bounding Boxes")
-        plt.show()
-        return image_cv
-
-
     def _parse_label(self, label_data):
         """Parse YOLO-formatted label data."""
         bboxes = []
@@ -418,8 +349,7 @@ class KITTI(Dataset):
         # Define augmentation transforms using albumentations
         # Define augmentation transforms using albumentations
         self.train_transform = albumentations.Compose([
-            albumentations.Resize(640, 480),
-            albumentations.RandomResizedCrop(height=640, width=480, scale=(0.8, 1.0), p=0.5),
+            albumentations.LongestMaxSize(max_size=640),
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.1),
             albumentations.Rotate(limit=15, p=0.5),
@@ -431,12 +361,12 @@ class KITTI(Dataset):
 
 
         self.val_transform = albumentations.Compose([
-            albumentations.Resize(640, 480),
+            albumentations.LongestMaxSize(max_size=640),
             ToTensorV2()
         ], bbox_params=albumentations.BboxParams(format='yolo', label_fields=['category_ids']))
 
         self.test_transform = albumentations.Compose([
-            albumentations.Resize(640, 480),
+            albumentations.LongestMaxSize(max_size=640),
             ToTensorV2()
         ])  # No bbox_params for test as there are no labels
 
@@ -449,6 +379,9 @@ class KITTI(Dataset):
             split_ratio=split_ratio
         )
 
+        image, label = self.training_data[5]
+        print(image.shape)
+        exit()
         self._validation_data = KITTICustom(
             root=self.path,
             split='val',
@@ -464,7 +397,7 @@ class KITTI(Dataset):
         )
 
         # Extract class names
-        self.class_names = self._training_data.get_labels()
+        self.class_names = self.training_data.get_labels()
 
         # Generate YAML configuration
         self.yaml_path = os.path.join(self.path, "kitti.yaml")
@@ -534,6 +467,73 @@ class KITTI(Dataset):
 
 
 
+def draw_bounding_boxes_cv2(self, image: numpy.ndarray, labels: dict) -> numpy.ndarray:
+        """
+        Draw bounding boxes on the image using OpenCV.
+
+        Args:
+            image (PIL.Image.Image or torch.Tensor): The image to draw on.
+            labels (dict): Dictionary containing 'boxes' and 'labels'.
+                           'boxes' should be a tensor of shape (N,4) in YOLO format [x_center, y_center, w, h],
+                           normalized between 0 and 1.
+                           'labels' should be a tensor of shape (N,) with class indices.
+
+        Returns:
+            np.ndarray: Image with bounding boxes drawn in BGR format (suitable for OpenCV).
+        """
+        # Convert image to OpenCV format (numpy array)
+        # Convert RGB to BGR
+        image = numpy.transpose(numpy.array(image), [1,2,0])
+        image_cv = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        # Invert LABEL_TO_INDEX to get index to label mapping
+        index_to_label = {v: k for k, v in self.LABEL_TO_INDEX.items()}
+
+        # Define a color palette (BGR format)
+        COLORS = {
+            "Car": (0, 0, 255),        # Red
+            "Pedestrian": (255, 0, 0), # Blue
+            "Cyclist": (0, 255, 0)     # Green
+        }
+
+        for box, label_idx in zip(labels['boxes'], labels['labels']):
+            # Convert YOLO format to pixel coordinates
+            x_center, y_center, w, h = box.tolist()
+            xmin = int((x_center - w / 2) * image_cv.shape[1])
+            ymin = int((y_center - h / 2) * image_cv.shape[0])
+            xmax = int((x_center + w / 2) * image_cv.shape[1])
+            ymax = int((y_center + h / 2) * image_cv.shape[0])
+
+            # Get label name
+            label = index_to_label.get(label_idx.item(), "N/A")
+
+            # Get color for the label
+            color = COLORS.get(label, (0, 255, 255))  # Default to Yellow
+
+            # Draw rectangle
+            cv2.rectangle(image_cv, (xmin, ymin), (xmax, ymax), color, thickness=2)
+
+            # Prepare label text
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.5
+            font_thickness = 1
+            text = label
+
+            # Get text size
+            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+
+            # Draw text background rectangle
+            cv2.rectangle(image_cv, (xmin, ymin - text_height - baseline), (xmin + text_width, ymin), color, thickness=-1)
+
+            # Put text above the rectangle
+            cv2.putText(image_cv, text, (xmin, ymin - baseline), font, font_scale, (255, 255, 255), font_thickness, lineType=cv2.LINE_AA)
+
+        plt.figure(figsize=(10, 8))
+        plt.imshow(image_cv)
+        plt.axis('off')  # Hide axis
+        plt.title("Image with Bounding Boxes")
+        plt.show()
+        return image_cv
 
 
 
