@@ -135,7 +135,7 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
         )
 
         parser.add_argument(
-            'C',
+            '-C',
             '--customize_dataset',
             action='store_true',
             help="Enable custom dataset processing, including user-defined augmentations and data loading."

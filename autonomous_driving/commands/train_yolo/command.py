@@ -36,21 +36,24 @@ class TrainYoloCommand(BaseCommand):
         # Loads the class corresponding to the specified dataset
         dataset_module = import_module("autonomous_driving.src.datasets")
         dataset_module_classes = getmembers(dataset_module, isclass)
+        dataset_class = None
+
         for _, class_object in dataset_module_classes:
-            if Dataset in class_object.__bases__ and hasattr(class_object, 'dataset_id') \
+            if issubclass(class_object, Dataset) and hasattr(class_object, 'dataset_id') \
                     and getattr(class_object, 'dataset_id') == command_line_arguments.dataset:
 
                 dataset_class = class_object
                 break
 
-            kitti_dataset = dataset_class(
-                path = command_line_arguments.dataset_path,
-                split_ratio = command_line_arguments.split_ratio,
-                customize_dataset = command_line_arguments.customize_dataset
-            )
-            kitti_dataset.download()
-        else:
+        if dataset_class is None:
             exit("Dataset not supported")
+
+        kitti_dataset = dataset_class(
+            path=command_line_arguments.dataset_path,
+            split_ratio=command_line_arguments.split_ratio,
+            customize_dataset=command_line_arguments.customize_dataset
+        )
+        kitti_dataset.download()
 
 
         dataset_path = command_line_arguments.dataset_path
