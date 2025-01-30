@@ -57,9 +57,9 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
 
         parser.add_argument(
             '-s'
-            'split_ratio',
+            '--split_ratio',
             type=float,
-            default=0.2,
+            default=0.8,
             help='The ratio of data of training set that is utilized for validation.'
         )
 
@@ -96,7 +96,7 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
             '-m',
             '--set_momentum',
             type=float,
-            default=0.9,
+            default=0.937,
             help='Momentum used by SGD (ignored if using Adam).'
         )
         parser.add_argument(
@@ -132,6 +132,13 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
             '--use_costum_loss_function',
             action='store_true',
             help='Whether to use a ustom trainer script that overrides YOLO loss function.'
+        )
+
+        parser.add_argument(
+            'C',
+            '--customize_dataset',
+            action='store_true',
+            help="Enable custom dataset processing, including user-defined augmentations and data loading."
         )
 
         parser.add_argument(

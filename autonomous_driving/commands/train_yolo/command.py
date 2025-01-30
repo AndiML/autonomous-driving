@@ -43,7 +43,11 @@ class TrainYoloCommand(BaseCommand):
                 dataset_class = class_object
                 break
 
-            kitti_dataset = dataset_class(command_line_arguments.dataset_path)
+            kitti_dataset = dataset_class(
+                path = command_line_arguments.dataset_path,
+                split_ratio = command_line_arguments.split_ratio,
+                customize_dataset = command_line_arguments.customize_dataset
+            )
             kitti_dataset.download()
         else:
             exit("Dataset not supported")

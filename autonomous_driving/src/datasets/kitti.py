@@ -332,65 +332,69 @@ class KITTICustom(Dataset):
 
 class KITTI(Dataset):
     """
-    KITTI Dataset class tailored for YOLOv8.
+    KITTI Dataset class tailored for YOLO.
     """
     dataset_id = 'kitti'
     """Contains a machine-readable ID that uniquely identifies the dataset."""
 
-    def __init__(self, path: str, split_ratio:float=0.8) -> None:
+    def __init__(self, path: str, split_ratio:float=0.8, customize_dataset: bool=False) -> None:
         """
         Initializes the KITTI dataset.
 
         Args:
             path (str): Path where the KITTI dataset is stored or will be downloaded to.
             split_ratio (float): Ratio of data to be used for training.
+            customize_dataset (bool): If True, allows users to apply custom data augmentations and handle the dataset loading process independently,
+            rather than relying on the default pipeline.
         """
         self.path = path
+        self.split_ratio = split_ratio
         self.name = 'KITTI'
+        if not customize_dataset:
         # Define augmentation transforms using albumentations
-        self.train_transform = albumentations.Compose([
-            albumentations.Resize(height=640, width=640),
-            albumentations.HorizontalFlip(p=0.5),
-            albumentations.VerticalFlip(p=0.1),
-            albumentations.Rotate(limit=15, p=0.5),
-            albumentations.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
-            albumentations.GaussianBlur(blur_limit=3, p=0.3),
-            albumentations.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.3),
-            ToTensorV2()
-        ], bbox_params=albumentations.BboxParams(format='yolo', label_fields=['category_ids']))
+            self.train_transform = albumentations.Compose([
+                albumentations.Resize(height=640, width=640),
+                albumentations.HorizontalFlip(p=0.5),
+                albumentations.VerticalFlip(p=0.1),
+                albumentations.Rotate(limit=15, p=0.5),
+                albumentations.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
+                albumentations.GaussianBlur(blur_limit=3, p=0.3),
+                albumentations.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.3),
+                ToTensorV2()
+            ], bbox_params=albumentations.BboxParams(format='yolo', label_fields=['category_ids']))
 
 
-        self.val_transform = albumentations.Compose([
-            albumentations.Resize(height=640, width=640),
-            ToTensorV2()
-        ], bbox_params=albumentations.BboxParams(format='yolo', label_fields=['category_ids']))
+            self.val_transform = albumentations.Compose([
+                albumentations.Resize(height=640, width=640),
+                ToTensorV2()
+            ], bbox_params=albumentations.BboxParams(format='yolo', label_fields=['category_ids']))
 
-        self.test_transform = albumentations.Compose([
-            albumentations.Resize(height=640, width=640),
-            ToTensorV2()
-        ])  # No bbox_params for test as there are no labels
+            self.test_transform = albumentations.Compose([
+                albumentations.Resize(height=640, width=640),
+                ToTensorV2()
+            ])  # No bbox_params for test as there are no labels
 
-        # Initialize training and validation datasets
-        self._training_data = KITTICustom(
-            root=self.path,
-            split='train',
-            download=True,
-            transform=self.train_transform,
-            split_ratio=split_ratio
-        )
-        self._validation_data = KITTICustom(
-            root=self.path,
-            split='val',
-            download=False,
-            transform=self.val_transform,
-            split_ratio=split_ratio
-        )
-        self._test_data = KITTICustom(
-            root=self.path,
-            split='test',
-            download=False,
-            transform=self.test_transform
-        )
+            # Initialize training and validation datasets
+            self._training_data = KITTICustom(
+                root=self.path,
+                split='train',
+                download=True,
+                transform=self.train_transform,
+                split_ratio=split_ratio
+            )
+            self._validation_data = KITTICustom(
+                root=self.path,
+                split='val',
+                download=False,
+                transform=self.val_transform,
+                split_ratio=split_ratio
+            )
+            self._test_data = KITTICustom(
+                root=self.path,
+                split='test',
+                download=False,
+                transform=self.test_transform
+            )
 
 
     def get_labels(self) -> list[int]:
@@ -424,121 +428,12 @@ class KITTI(Dataset):
 
 
     @staticmethod
-    def download(path: str, split_ratio: float=0.8) -> None:
-        """Download and prepare the KITTI dataset.
-
-        Args:
-            path (str): Directory where the dataset will be stored.
-            split_ratio (float): Ratio of data to be used for training.
-        """
-        KITTICustom(root=path, download=True, transform=None, split_ratio=split_ratio)
+    def download(self) -> None:
+        """Download  the KITTI dataset and generate  YAML configuration file"""
+        KITTICustom(root=self.path, download=True, transform=None, split_ratio=self.split_ratio)
 
         # Generate YAML configuration
         KITTICustom._generate_yaml()
 
 
 
-def draw_bounding_boxes_cv2(self, image: numpy.ndarray, labels: dict) -> numpy.ndarray:
-        """
-        Draw bounding boxes on the image using OpenCV.
-
-        Args:
-            image (PIL.Image.Image or torch.Tensor): The image to draw on.
-            labels (dict): Dictionary containing 'boxes' and 'labels'.
-                           'boxes' should be a tensor of shape (N,4) in YOLO format [x_center, y_center, w, h],
-                           normalized between 0 and 1.
-                           'labels' should be a tensor of shape (N,) with class indices.
-
-        Returns:
-            np.ndarray: Image with bounding boxes drawn in BGR format (suitable for OpenCV).
-        """
-        # Convert image to OpenCV format (numpy array)
-        # Convert RGB to BGR
-        image = numpy.transpose(numpy.array(image), [1,2,0])
-        image_cv = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-        # Invert CLASS_TO_INDEXEX to get index to label mapping
-        index_to_label = {v: k for k, v in self.CLASS_TO_INDEX.items()}
-
-        # Define a color palette (BGR format)
-        COLORS = {
-            "Car": (0, 0, 255),        # Red
-            "Pedestrian": (255, 0, 0), # Blue
-            "Cyclist": (0, 255, 0)     # Green
-        }
-
-        for box, label_idx in zip(labels['boxes'], labels['labels']):
-            # Convert YOLO format to pixel coordinates
-            x_center, y_center, w, h = box.tolist()
-            xmin = int((x_center - w / 2) * image_cv.shape[1])
-            ymin = int((y_center - h / 2) * image_cv.shape[0])
-            xmax = int((x_center + w / 2) * image_cv.shape[1])
-            ymax = int((y_center + h / 2) * image_cv.shape[0])
-
-            # Get label name
-            label = index_to_label.get(label_idx.item(), "N/A")
-
-            # Get color for the label
-            color = COLORS.get(label, (0, 255, 255))  # Default to Yellow
-
-            # Draw rectangle
-            cv2.rectangle(image_cv, (xmin, ymin), (xmax, ymax), color, thickness=2)
-
-            # Prepare label text
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 0.5
-            font_thickness = 1
-            text = label
-
-            # Get text size
-            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
-
-            # Draw text background rectangle
-            cv2.rectangle(image_cv, (xmin, ymin - text_height - baseline), (xmin + text_width, ymin), color, thickness=-1)
-
-            # Put text above the rectangle
-            cv2.putText(image_cv, text, (xmin, ymin - baseline), font, font_scale, (255, 255, 255), font_thickness, lineType=cv2.LINE_AA)
-
-        plt.figure(figsize=(10, 8))
-        plt.imshow(image_cv)
-        plt.axis('off')  # Hide axis
-        plt.title("Image with Bounding Boxes")
-        plt.show()
-        return image_cv
-
-
-
-
-
-
-
-
-
-# if __name__ == "__main__":
-#     # Define the root directory for the dataset
-#     dataset_root = '/path/to/dataset/root'  # Replace with your desired path
-
-#     # Initialize and prepare the KITTI dataset
-#     kitti_dataset = KITTI(path=dataset_root)
-
-#     # Verify the YAML file
-#     yaml_path = kitti_dataset.yaml_path
-#     print(f"YAML configuration located at: {yaml_path}")
-
-#     # Initialize YOLOv8 model (Ensure you have the Ultralytics package installed)
-#     # Install with: pip install ultralytics
-#     from ultralytics import YOLO
-
-#     # Initialize the model (e.g., YOLOv8s)
-#     model = YOLO('yolov8s.pt')  # You can choose other variants like 'yolov8m.pt', 'yolov8l.pt', etc.
-
-#     # Train the model
-#     model.train(data=yaml_path, epochs=100, imgsz=640)
-
-#     # Evaluate the model
-#     results = model.val()
-
-#     # Inference example
-#     # Replace '/path/to/image.jpg' with an actual image path
-#     # results = model('/path/to/image.jpg')
-#     # results.show()
