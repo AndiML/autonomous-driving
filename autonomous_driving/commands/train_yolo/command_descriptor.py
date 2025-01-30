@@ -56,7 +56,7 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
         )
 
         parser.add_argument(
-            '-s'
+            '-s',
             '--split_ratio',
             type=float,
             default=0.8,
