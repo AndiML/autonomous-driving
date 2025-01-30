@@ -4,8 +4,11 @@ import logging
 import os
 
 from argparse import Namespace
+from importlib import import_module
+from inspect import getmembers, isclass
 
 from autonomous_driving.commands.base import BaseCommand
+from autonomous_driving.src.datasets.dataset import Dataset
 from autonomous_driving.src.datasets.data_generator import create_dataloader
 
 from ultralytics import YOLO
@@ -27,8 +30,25 @@ class TrainYoloCommand(BaseCommand):
         device = 'cuda' if command_line_arguments.use_gpu else 'cpu'
         self.logger.info('Selected %s for Training Process', device.upper())
 
-        # Retrieve config YAML of specfied dataset
-        self.logger.info(f'Retrieving YAML File for {command_line_arguments.dataset.upper()}', extra={'start_section': True})
+        # Download the dataset and retrieve config YAML of specfied dataset
+        self.logger.info(f'Download and Retrieving YAML File for {command_line_arguments.dataset.upper()}', extra={'start_section': True})
+
+        # Loads the class corresponding to the specified dataset
+        dataset_module = import_module("autonomous_driving.src.datasets")
+        dataset_module_classes = getmembers(dataset_module, isclass)
+        for _, class_object in dataset_module_classes:
+            if Dataset in class_object.__bases__ and hasattr(class_object, 'dataset_id') \
+                    and getattr(class_object, 'dataset_id') == command_line_arguments.dataset:
+
+                dataset_class = class_object
+                break
+
+            kitti_dataset = dataset_class(command_line_arguments.dataset_path)
+            kitti_dataset.download()
+        else:
+            exit("Dataset not supported")
+
+
         dataset_path = command_line_arguments.dataset_path
         yaml_config_path = os.path.join(dataset_path, f"{command_line_arguments.dataset}.yaml")
         if not os.path.exists(yaml_config_path):
@@ -36,12 +56,13 @@ class TrainYoloCommand(BaseCommand):
 
 
         # Loads YOLO model
-        if command_line_arguments.model is not None:
-            model = YOLO(command_line_arguments.model)
+        if command_line_arguments.model_path is not None:
+            model = YOLO(command_line_arguments.model_path)
         else:
             model = YOLO()  # starts with no weights/config
 
         if command_line_arguments.use_costum_loss_function:
+            print('Not implemented')
             # Dynamically load custom
             # from your_package.my_trainer import MyCustomTrainer
             # model.trainer = MyCustomTrainer(model=model)

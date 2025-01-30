@@ -43,21 +43,39 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
         parser.add_argument(
             'dataset_path',
             type=str,
-            help='Directory containing the dataset and the kitti.yaml file.'
+            help='Directory in whcih dataset is stored..'
         )
+
+        parser.add_argument(
+            '-d',
+            '--dataset',
+            type=str,
+            default=DEFAULT_DATASET_ID,
+            choices=DATASET_IDS,
+            help=f'Name of dataset used for training. Defaults to "{DEFAULT_DATASET_ID}".'
+        )
+
+        parser.add_argument(
+            '-s'
+            'split_ratio',
+            type=float,
+            default=0.2,
+            help='The ratio of data of training set that is utilized for validation.'
+        )
+
         # Training hyperparameters
         parser.add_argument(
             '-e',
             '--number_of_epochs',
             type=int,
-            default=10,
+            default=100,
             help="Number of training epochs."
         )
         parser.add_argument(
             '-b',
             '--batchsize',
             type=int,
-            default=16,
+            default=10,
             help="Batch size for YOLO training."
         )
         parser.add_argument(
@@ -101,7 +119,7 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
 
         # Optional: If you want to specify a YOLO model or config explicitly
         parser.add_argument(
-            '-p'
+            '-p',
             '--model_path',
             type=str,
             default=None,
@@ -110,6 +128,7 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
 
         # Optional: If you plan to override the default trainer
         parser.add_argument(
+            '-c',
             '--use_costum_loss_function',
             action='store_true',
             help='Whether to use a ustom trainer script that overrides YOLO loss function.'

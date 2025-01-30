@@ -27,7 +27,15 @@ class KITTICustom(Dataset):
     URL_IMAGE_DATA = "https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_image_2.zip"
     URL_LABEL_ANNOTATIONS = "https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_label_2.zip"
 
-    LABEL_TO_INDEX = {"Car": 0, "Pedestrian": 1, "Cyclist": 2}
+    CLASS_TO_INDEX = {
+    "Car": 0,
+    "Pedestrian": 1,
+    "Cyclist": 2,
+    "Truck": 3,
+    "Van": 4,
+    "Tram": 5,
+    "Person_sitting": 6
+    }
 
     def __init__(self, root: str, split: str ='train', transform=None, download: bool=False, split_ratio: float=0.8):
         """
@@ -115,7 +123,7 @@ class KITTICustom(Dataset):
                     zip_ref.extract(zip_info, extract_to)
                     bar.update(1)
 
-    def _preprocess_labels(self):
+    def _preprocess_labels(self)-> None:
         """
         Convert KITTI labels to YOLO format and organize dataset into train and val directories.
         """
@@ -179,7 +187,7 @@ class KITTICustom(Dataset):
 
         print("Preprocessing complete.")
 
-    def _convert_label_to_yolo(self, src_label_path, dest_label_path, image_path):
+    def _convert_label_to_yolo(self, src_label_path: str, dest_label_path:str , image_path: str) -> None:
         """Convert KITTI label format to YOLO format."""
         with open(src_label_path, 'r') as f:
             lines = f.readlines()
@@ -192,9 +200,9 @@ class KITTICustom(Dataset):
             if len(parts) < 8:
                 continue  # Incomplete label
             class_name = parts[0]
-            if class_name not in self.LABEL_TO_INDEX:
+            if class_name not in self.CLASS_TO_INDEX:
                 continue  # Ignore classes not in the specified list
-            class_id = self.LABEL_TO_INDEX[class_name]
+            class_id = self.CLASS_TO_INDEX[class_name]
             xmin = float(parts[4])
             ymin = float(parts[5])
             xmax = float(parts[6])
@@ -229,7 +237,8 @@ class KITTICustom(Dataset):
             labels_dir = self.train_labels_dir if self.split == 'train' else self.val_labels_dir
 
             images = sorted(glob(os.path.join(images_dir, "*.png")))
-            labels = sorted(glob(os.path.join(labels_dir, "*.txt")))
+            label_files = sorted(glob(os.path.join(labels_dir, "*.txt")))
+            labels = [self._parse_label_file(label_file) for label_file in label_files]
 
         return images, labels
 
@@ -237,60 +246,32 @@ class KITTICustom(Dataset):
         return len(self.images)
 
     def __getitem__(self, index: int):
-        """
-        Retrieve the image and label at the specified index.
-
-        Args:
-            index (int): Index of the data point.
-
-        Returns:
-            image (torch.Tensor): Transformed image tensor.
-            label (dict): Dictionary containing bounding boxes and labels (if applicable).
-        """
-
         img_path = self.images[index]
+        label = self.labels[index] if self.split != 'test' else None
 
-        if self.split != 'test':
-            label_path = self.labels[index]
-
-        # Load image
         image = numpy.array(Image.open(img_path))
 
-        # Initialize bboxes and category_ids
-        bboxes = []
-        category_ids = []
+        bboxes, category_ids = label if label else ([], [])
 
-        if self.split != 'test':
-            # Load label
-            with open(label_path, 'r') as f:
-                label_data = f.read()
-                if label_data.strip():  # Ensure the label file is not empty
-                    bboxes, category_ids = self._parse_label(label_data)
-
-        # Apply transformations
         if self.transform:
             transformed = self.transform(image=image, bboxes=bboxes, category_ids=category_ids)
             image = transformed['image']
             bboxes = transformed['bboxes']
             category_ids = transformed['category_ids']
 
-        # Convert to tensors
         if self.split != 'test':
-            if bboxes:
-                labels = {
-                    'boxes': torch.tensor(bboxes, dtype=torch.float32),
-                    'labels': torch.tensor(category_ids, dtype=torch.long)
-                }
-            else:
-                labels = {
-                    'boxes': torch.empty((0, 4), dtype=torch.float32),
-                    'labels': torch.empty((0,), dtype=torch.long)
-                }
+            labels = {
+                'boxes': torch.tensor(bboxes, dtype=torch.float32),
+                'labels': torch.tensor(category_ids, dtype=torch.long)
+            }
             return image, labels
         else:
-            # For test split, return only the image
             return image
 
+    def _parse_label_file(self, label_path):
+        with open(label_path, 'r') as f:
+            label_data = f.read()
+        return self._parse_label(label_data)
 
     def _parse_label(self, label_data):
         """Parse YOLO-formatted label data."""
@@ -317,8 +298,29 @@ class KITTICustom(Dataset):
         return all(os.path.exists(d) for d in required_dirs)
 
 
-    def get_labels(self) -> dict[str, int]:
-        return self
+
+    def _generate_yaml(self):
+        """Generate the YAML configuration file for YOLO model."""
+
+        yaml_path = os.path.join(self.dataset_dir, "kitti.yaml")
+
+        data = {
+            'train': os.path.join('kitti_dataset', 'images', 'train'),
+            'val': os.path.join('kitti_dataset', 'images', 'val'),
+            'test': os.path.join('kitti_dataset', 'images', 'test'),
+            'nc': len(self.CLASS_TO_INDEX),
+            'names': list(self.CLASS_TO_INDEX.values())
+        }
+
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data, f)
+
+        print(f"YOLO YAML configuration saved to {yaml_path}")
+
+
+    def get_labels(self) -> list[str]:
+        """Retrieve the list of class names."""
+        return list(self.CLASS_TO_INDEX.keys())
 
     @property
     def sample_shape(self) -> tuple[int, ...]:
@@ -335,7 +337,7 @@ class KITTI(Dataset):
     dataset_id = 'kitti'
     """Contains a machine-readable ID that uniquely identifies the dataset."""
 
-    def __init__(self, path: str, split_ratio=0.8):
+    def __init__(self, path: str, split_ratio:float=0.8) -> None:
         """
         Initializes the KITTI dataset.
 
@@ -345,11 +347,9 @@ class KITTI(Dataset):
         """
         self.path = path
         self.name = 'KITTI'
-
-        # Define augmentation transforms using albumentations
         # Define augmentation transforms using albumentations
         self.train_transform = albumentations.Compose([
-            albumentations.LongestMaxSize(max_size=640),
+            albumentations.Resize(height=640, width=640),
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.1),
             albumentations.Rotate(limit=15, p=0.5),
@@ -361,12 +361,12 @@ class KITTI(Dataset):
 
 
         self.val_transform = albumentations.Compose([
-            albumentations.LongestMaxSize(max_size=640),
+            albumentations.Resize(height=640, width=640),
             ToTensorV2()
         ], bbox_params=albumentations.BboxParams(format='yolo', label_fields=['category_ids']))
 
         self.test_transform = albumentations.Compose([
-            albumentations.LongestMaxSize(max_size=640),
+            albumentations.Resize(height=640, width=640),
             ToTensorV2()
         ])  # No bbox_params for test as there are no labels
 
@@ -378,10 +378,6 @@ class KITTI(Dataset):
             transform=self.train_transform,
             split_ratio=split_ratio
         )
-
-        image, label = self.training_data[5]
-        print(image.shape)
-        exit()
         self._validation_data = KITTICustom(
             root=self.path,
             split='val',
@@ -396,31 +392,10 @@ class KITTI(Dataset):
             transform=self.test_transform
         )
 
-        # Extract class names
-        self.class_names = self.training_data.get_labels()
-
-        # Generate YAML configuration
-        self.yaml_path = os.path.join(self.path, "kitti.yaml")
-        self._generate_yaml()
-
-    def _generate_yaml(self):
-        """Generate the YAML configuration file for YOLOv8."""
-        data = {
-            'train': os.path.join(self.path, 'kitti_dataset', 'images', 'train'),
-            'val': os.path.join(self.path, 'kitti_dataset', 'images', 'val'),
-            'test': os.path.join(self.path, 'kitti_dataset', 'images', 'test'),
-            'nc': len(self.class_names),
-            'names': self.class_names
-        }
-
-        with open(self.yaml_path, 'w') as f:
-            yaml.dump(data, f)
-
-        print(f"YOLOv8 YAML configuration saved to {self.yaml_path}")
 
     def get_labels(self) -> list[int]:
         """Retrieve the list of class names."""
-        return list(self.class_names.keys())
+        return list(self.training_data.CLASS_TO_INDEX.keys())
 
     @property
     def training_data(self) -> KITTICustom:
@@ -449,7 +424,7 @@ class KITTI(Dataset):
 
 
     @staticmethod
-    def download(path: str, split_ratio=0.8) -> None:
+    def download(path: str, split_ratio: float=0.8) -> None:
         """Download and prepare the KITTI dataset.
 
         Args:
@@ -458,12 +433,8 @@ class KITTI(Dataset):
         """
         KITTICustom(root=path, download=True, transform=None, split_ratio=split_ratio)
 
-
-
-
-
-
-
+        # Generate YAML configuration
+        KITTICustom._generate_yaml()
 
 
 
@@ -486,8 +457,8 @@ def draw_bounding_boxes_cv2(self, image: numpy.ndarray, labels: dict) -> numpy.n
         image = numpy.transpose(numpy.array(image), [1,2,0])
         image_cv = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-        # Invert LABEL_TO_INDEX to get index to label mapping
-        index_to_label = {v: k for k, v in self.LABEL_TO_INDEX.items()}
+        # Invert CLASS_TO_INDEXEX to get index to label mapping
+        index_to_label = {v: k for k, v in self.CLASS_TO_INDEX.items()}
 
         # Define a color palette (BGR format)
         COLORS = {
