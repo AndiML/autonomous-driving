@@ -75,7 +75,7 @@ class TrainYoloCommandDescriptor(BaseCommandDescriptor):
             '-b',
             '--batchsize',
             type=int,
-            default=10,
+            default=16,
             help="Batch size for YOLO training."
         )
         parser.add_argument(

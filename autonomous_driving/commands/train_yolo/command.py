@@ -57,7 +57,11 @@ class TrainYoloCommand(BaseCommand):
 
 
         dataset_path = command_line_arguments.dataset_path
-        yaml_config_path = os.path.join(dataset_path, f"{command_line_arguments.dataset}.yaml")
+        yaml_config_path = os.path.join(
+            dataset_path,
+            f"{command_line_arguments.dataset}",
+            f"{command_line_arguments.dataset}.yaml"
+        )
         if not os.path.exists(yaml_config_path):
             raise FileNotFoundError(f"YAML configuration file not found at {yaml_config_path}.")
 
@@ -69,7 +73,7 @@ class TrainYoloCommand(BaseCommand):
             model = YOLO()  # starts with no weights/config
 
         if command_line_arguments.use_costum_loss_function:
-            print('Not implemented')
+            exit('Not implemented')
             # Dynamically load custom
             # from your_package.my_trainer import MyCustomTrainer
             # model.trainer = MyCustomTrainer(model=model)

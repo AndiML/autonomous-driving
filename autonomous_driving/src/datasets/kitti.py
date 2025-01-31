@@ -54,7 +54,7 @@ class KITTICustom(Dataset):
         self.split_ratio = split_ratio
 
         # Define directories
-        self.dataset_dir = os.path.join(root, "kitti_dataset")
+        self.dataset_dir = os.path.join(root, "kitti")
         self.images_dir = os.path.join(self.dataset_dir, "images")
         self.labels_dir = os.path.join(self.dataset_dir, "labels")
         self.train_images_dir = os.path.join(self.images_dir, "train")
@@ -305,11 +305,11 @@ class KITTICustom(Dataset):
         yaml_path = os.path.join(self.dataset_dir, "kitti.yaml")
 
         data = {
-            'train': os.path.join('kitti_dataset', 'images', 'train'),
-            'val': os.path.join('kitti_dataset', 'images', 'val'),
-            'test': os.path.join('kitti_dataset', 'images', 'test'),
+            'train': os.path.join('images', 'train'),
+            'val': os.path.join('images', 'val'),
+            'test': os.path.join('images', 'test'),
             'nc': len(self.CLASS_TO_INDEX),
-            'names': list(self.CLASS_TO_INDEX.values())
+            'names': list(self.CLASS_TO_INDEX.keys())
         }
 
         with open(yaml_path, 'w') as f:
@@ -350,7 +350,7 @@ class KITTI(Dataset):
         self.path = path
         self.split_ratio = split_ratio
         self.name = 'KITTI'
-        if not customize_dataset:
+        if  customize_dataset:
         # Define augmentation transforms using albumentations
             self.train_transform = albumentations.Compose([
                 albumentations.Resize(height=640, width=640),
@@ -426,14 +426,12 @@ class KITTI(Dataset):
         """Returns the shape of the input samples."""
         return self.training_data[0].shape
 
-
-    @staticmethod
     def download(self) -> None:
         """Download  the KITTI dataset and generate  YAML configuration file"""
-        KITTICustom(root=self.path, download=True, transform=None, split_ratio=self.split_ratio)
+        data_instance = KITTICustom(root=self.path, download=True, transform=None, split_ratio=self.split_ratio)
 
         # Generate YAML configuration
-        KITTICustom._generate_yaml()
+        data_instance._generate_yaml()
 
 
 
